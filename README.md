@@ -2,11 +2,9 @@
 mining frequent itemsets from large data
 
 to compile:
-
 \# g++ simplicial_complex.cpp -pthread
 
 to run:
-
 \# ./a.out configSample_65k 4
 
 result file is "resultFile"

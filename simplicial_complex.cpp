@@ -5,16 +5,16 @@
  * San Jose State University
  *
  */ 
-#include<stdio.h>
-#include<stdlib.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include<string>
-#include<time.h>
-#include<list>
-#include<sstream>
-#include<iostream>
+#include <string>
+#include <time.h>
+#include <sstream>
+#include <iostream>
 #include <fstream>
-#include<stack>
+#include <stack>
+#include <unistd.h>
 using namespace std;
 
 /* Vertex data structure
@@ -128,11 +128,6 @@ int read_config_file(char *configFile)
 {
 	FILE *fp;
 	float thresholdDecimal;
-/*
-	cout<<"\n####################################################\n"<<endl;
-	cout<<" Rui Tong\n Department of Computer Science\n San Jose State University";
-	cout<<"\n####################################################\n"<<endl;
-*/
 	if ((fp = fopen(configFile, "r")) == NULL) {
 		printf("Can't open config file, %s.\n", configFile);
 		exit(1);
@@ -150,11 +145,26 @@ int read_config_file(char *configFile)
  * Function: show_time()
  * Description: show the running time start from beginning
  */
-float show_time(){
-	float time=(float)clock()/CLOCKS_PER_SEC;
-	//printf("time %.4f secs.\n", time);
-	return time;
+double show_time(struct timespec *start)
+{
+	struct timespec finish;
+	double elapsed;
+	
+	clock_gettime(CLOCK_MONOTONIC, &finish);
+
+	elapsed = (finish.tv_sec - start->tv_sec);
+	elapsed += (finish.tv_nsec - start->tv_nsec) / 1000000000.0;
 }
+/* 
+ * clock() measure CPU time, not Wall time, so it won't work in multithread program.
+ *
+ * float show_time(){
+ *       float time=(float)clock()/CLOCKS_PER_SEC;
+ *       //printf("time %.4f secs.\n", time);
+ *       return time;
+ * }
+ *
+ */
 
 /******************************************************************************************
  * Function: destroy()
@@ -401,7 +411,7 @@ void extract_Star(Star_pointer tp, stack<Star_pointer> **sp, int num_thread)
  * 1. output the frequent patterns based on support
  * 2. if current Vertex has two or more related vertex, then check the lines, triangles and so on.
  *
- gg*/
+ */
 
 void *visit_Star(void *stack_pointer){
 	stack<Star_pointer> *sp = (stack<Star_pointer> *)stack_pointer;
@@ -418,10 +428,6 @@ void *visit_Star(void *stack_pointer){
 		Star_pointer tp = sp->top();//get the first one everytime
 
 		sp->pop();//then delete it from stack
-
-		/////////////////////////////////////////////////
-		//This is the place to print out 
-		//myfile<<"\nVisit Star: "<<tp->core_simplex<<endl;
 
 		//output current connections's frequent patterns 
 		for(int i=0;i<tp->num_vertex;i++){
@@ -534,40 +540,52 @@ int main(int argc, char *argv[])
 
 	int num_thread = atoi(argv[2]), i;
 	printf("\nrunning on %d thread(s) ...\n", num_thread);
+	
+	struct timespec start;
+	clock_gettime(CLOCK_MONOTONIC, &start);
 
-	float time1 = show_time();//beginning
+	double time1 = show_time(&start);//beginning
 	read_config_file(argv[1]);
 
 	Star_pointer op = new Star;
 	init_connections(op);
 	Star_pointer tp =  check_related_vertex(op);//trim not qualified vertex
 
-	float time2 = show_time();//constructing
-	printf("Construct simplicial complex structure: %.3f seconds\n", time2 - time1);
+	double time2 = show_time(&start);//constructing
+	printf("Initialization: \t%.3f seconds\n", time2 - time1);
 
 	stack<Star_pointer> **stackp = (stack<Star_pointer> **)malloc(num_thread * sizeof(stack<Star_pointer> *));
 	for(i=0;i<num_thread;i++)
 		stackp[i] = new stack<Star_pointer>;
 
 	extract_Star(tp, stackp, num_thread);
-	float time3 = show_time();//extract
-	printf("Take out every Star: %.3f seconds\n", time3 - time2);
+	double time3 = show_time(&start);//extract
+	printf("Building Stacks: \t%.3f seconds\n", time3 - time2);
 
 	pthread_t *t = (pthread_t *)malloc(num_thread * sizeof(pthread_t));
         for(i=0;i<num_thread;i++){
                 pthread_create(&t[i], NULL, visit_Star, (void *)stackp[i]);
         }
-	
+
+	/*merge tmp files into result file*/	
 	for(i=0;i<num_thread;i++){
 		void *res;
 		pthread_join(t[i], &res);
-		free(res);
+
+		ofstream fout(association_rules, std::ofstream::app);
+		ifstream fin((char *)res);
+		string line;
+		while(std::getline(fin, line)) 
+			fout << line << '\n';
+		
+		unlink((char*)res);
+		free((char*)res);
 	}
 	
-	float time4 = show_time();//visit
-	printf("Visit Star and connect vertexes: %.3f seconds\n\n", time4 - time3);
+	double time4 = show_time(&start);
+	printf("Frequent Patterns: \t%.3f seconds\n\n", time4 - time3);
 
-	/*free the stackp here!*/
+	/*free the stackp*/
 	for(i=0;i<num_thread;i++){
 		delete stackp[i];
 	}

@@ -128,11 +128,11 @@ int read_config_file(char *configFile)
 {
 	FILE *fp;
 	float thresholdDecimal;
-
+/*
 	cout<<"\n####################################################\n"<<endl;
-	cout<<" Rui Tong\n Department of Computer Science\n San Jose State University\n\n";
+	cout<<" Rui Tong\n Department of Computer Science\n San Jose State University";
 	cout<<"\n####################################################\n"<<endl;
-
+*/
 	if ((fp = fopen(configFile, "r")) == NULL) {
 		printf("Can't open config file, %s.\n", configFile);
 		exit(1);
@@ -152,7 +152,7 @@ int read_config_file(char *configFile)
  */
 float show_time(){
 	float time=(float)clock()/CLOCKS_PER_SEC;
-	//printf("\n\ntime %d: %.4f secs. (%s)\n", i, time, str);
+	//printf("time %.4f secs.\n", time);
 	return time;
 }
 
@@ -299,7 +299,8 @@ int sort_two_array_asec(int *support, int *vertex_nameset, int low,int high, int
  *		together with this vertex. 
  *
  */
-void extract_Star(Star_pointer tp)
+
+void extract_Star(Star_pointer tp, stack<Star_pointer> **sp, int num_thread)
 {
 	ofstream myfile;
 	myfile.open(association_rules);
@@ -384,8 +385,9 @@ void extract_Star(Star_pointer tp)
 		/*shrink by threshold*/
 		Star_pointer newp = check_related_vertex(stakp);
 
-		if(newp->num_vertex >0)
-			stk.push(newp);
+		if(newp->num_vertex >0){
+			sp[i%num_thread]->push(newp);
+		}
 	}
 	destroy(tp);
 }
@@ -399,16 +401,23 @@ void extract_Star(Star_pointer tp)
  * 1. output the frequent patterns based on support
  * 2. if current Vertex has two or more related vertex, then check the lines, triangles and so on.
  *
- */
-void visit_Star(){
+ gg*/
+
+void *visit_Star(void *stack_pointer){
+	stack<Star_pointer> *sp = (stack<Star_pointer> *)stack_pointer;
+
+        char *filename = (char *)malloc(10); //need to free it in main function!
+        strcpy(filename, "tmpXXXXXX");
+        mkstemp(filename); 
+
 	ofstream myfile;
-	myfile.open(association_rules, std::fstream::app);
+	myfile.open(filename, std::fstream::app);
 
-	while(!stk.empty())//loop through the stack until it's empty
+	while(!sp->empty())//loop through the stack until it's empty
 	{
-		Star_pointer tp = stk.top();//get the first one everytime
+		Star_pointer tp = sp->top();//get the first one everytime
 
-		stk.pop();//then delete it from stack
+		sp->pop();//then delete it from stack
 
 		/////////////////////////////////////////////////
 		//This is the place to print out 
@@ -505,22 +514,26 @@ void visit_Star(){
 				Star_pointer newp = check_related_vertex(stakp);
 
 				if(newp->num_vertex >0)
-					stk.push(newp);
+					sp->push(newp);
 			}
 			destroy(tp);
 		}
 
 	}
+	return (void *)filename;
 }
 /******************************************************************************************
  * Function: main
  */
 int main(int argc, char *argv[])
 {
-	if (argc != 2) {
-		printf("Usage: %s <config. file>\n\n", argv[0]);
+	if (argc != 3) {
+		printf("Usage: %s <config-file> <#-of-thread>\n\n", argv[0]);
 		exit(1);
 	}
+
+	int num_thread = atoi(argv[2]), i;
+	printf("\nrunning on %d thread(s) ...\n", num_thread);
 
 	float time1 = show_time();//beginning
 	read_config_file(argv[1]);
@@ -532,14 +545,35 @@ int main(int argc, char *argv[])
 	float time2 = show_time();//constructing
 	printf("Construct simplicial complex structure: %.3f seconds\n", time2 - time1);
 
-	extract_Star(tp);
+	stack<Star_pointer> **stackp = (stack<Star_pointer> **)malloc(num_thread * sizeof(stack<Star_pointer> *));
+	for(i=0;i<num_thread;i++)
+		stackp[i] = new stack<Star_pointer>;
+
+	extract_Star(tp, stackp, num_thread);
 	float time3 = show_time();//extract
 	printf("Take out every Star: %.3f seconds\n", time3 - time2);
 
-	visit_Star();
+	pthread_t *t = (pthread_t *)malloc(num_thread * sizeof(pthread_t));
+        for(i=0;i<num_thread;i++){
+                pthread_create(&t[i], NULL, visit_Star, (void *)stackp[i]);
+        }
+	
+	for(i=0;i<num_thread;i++){
+		void *res;
+		pthread_join(t[i], &res);
+		free(res);
+	}
+	
 	float time4 = show_time();//visit
 	printf("Visit Star and connect vertexes: %.3f seconds\n\n", time4 - time3);
-	
+
+	/*free the stackp here!*/
+	for(i=0;i<num_thread;i++){
+		delete stackp[i];
+	}
+	free(stackp);
+	free(t);
+
 	return 0;
 }
 

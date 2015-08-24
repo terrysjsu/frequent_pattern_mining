@@ -4,8 +4,6 @@
  * Department of Computer Science
  * San Jose State University
  *
- * Destination: This program is to implement the idea of simplicial complex method using in association rules mining.
- * 2012,12 -- 2013, 11
  */ 
 #include<stdio.h>
 #include<stdlib.h>
@@ -133,8 +131,6 @@ int read_config_file(char *configFile)
 
 	cout<<"\n####################################################\n"<<endl;
 	cout<<" Rui Tong\n Department of Computer Science\n San Jose State University\n\n";
-	cout<<" Destination: This program is to implement the\n   idea of simplicial complex method using in \n   association rules mining.\n";
-	cout<<" \t\t\t2012, 12 -- 2013, 5"<<endl;
 	cout<<"\n####################################################\n"<<endl;
 
 	if ((fp = fopen(configFile, "r")) == NULL) {
